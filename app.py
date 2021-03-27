@@ -66,5 +66,37 @@ def mine():
     return jsonify(response), 200
 
 
+@app.route('/nodes/register', methods=['POST'])
+def register_nodes():
+    """
+    Register a new Node
+    """
+    body = request.get_json()
+    nodes = body.get('nodes')
+    if nodes is None:
+        return "Error: Please provide a valid list of nodes", 400
+
+    for node in nodes:
+        blockchain.register_new_node(node)
+
+    resp = {'message': "Successfully added new nodes.",
+            'total_nodes': list(blockchain.nodes)}
+    return jsonify(resp), 201
+
+
+@app.route('/nodes/resolve', methods=['GET'])
+def consensus():
+    replaced = blockchain.resolve_conflicts()
+
+    if replaced:
+        resp = {'message': 'Our chain was replaced',
+                'new_chain': blockchain.chain}
+    else:
+        resp = {'message': 'Our chain is authoritative',
+                'new_chain': blockchain.chain}
+
+    return jsonify(resp), 200
+
+
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=6000)
+    app.run(host='127.0.0.1', port=6001)

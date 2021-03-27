@@ -1,12 +1,16 @@
 import hashlib
 import json
 from time import time
+from typing import Sequence
+from urllib.parse import urlparse
+import requests
 
 
 class Blockchain(object):
     def __init__(self):
         self.chain = []
         self.current_transactions = []
+        self.nodes = set()
 
         # Create genesis block
         self.new_block(previous_hash=1, proof=100)
@@ -88,3 +92,59 @@ class Blockchain(object):
         guess = f'{last_proof}{proof}'.encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
         return guess_hash[:4] == "0000"
+
+    def register_new_node(self, address: str) -> None:
+        """
+        Register a new Node
+        """
+        parse_url = urlparse(address)
+        self.nodes.add(parse_url.netloc)
+
+    def valid_chain(self, chain) -> bool:
+        """
+        Determine if a given blockchain is valid
+        """
+        last_block = chain[0]
+        current_ind = 1
+
+        while current_ind < len(chain):
+            block = chain[current_ind]
+            print(f"{last_block}\n{block}\n---------\n")
+            # Check hash of the block
+            if block['previous_hash'] != self.hash(last_block):
+                return False
+            # Check the proof of work
+            if not self.valid_proof(last_block['proof'], block['proof']):
+                return False
+            last_block = block
+            current_ind += 1
+
+        return True
+
+    def resolve_conflicts(self) -> bool:
+        """
+        Consensus algorithm; resolves coflicts by replacing a chain with the
+        longest one in the network.
+        :return: True if chain was replaced, otherwise False
+        """
+        neighbours = self.nodes
+        new_chain = None
+
+        default_max_len = len(self.chain)
+
+        for node in neighbours:
+            resp = requests.get(f'http://{node}/chain')
+
+            if resp.status_code == 200:
+                resp_body = resp.json()
+                length = resp_body['length']
+                chain = resp_body['chain']
+
+                if length > default_max_len and self.valid_chain(chain):
+                    default_max_len = length
+                    new_chain = chain
+        if new_chain:
+            self.chain = new_chain
+            return True
+
+        return False
